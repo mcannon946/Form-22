@@ -1,0 +1,26 @@
+{
+      "name": "nc-form22-generator",
+        "version": "0.1.0",
+          "description": "Automated generator for North Carolina Form 22",
+            "private": true,
+              "scripts": {
+                  "lint": "eslint src/js/",
+                      "test": "jest --coverage",
+                          "tauri:dev": "tauri dev",
+                              "tauri:build": "tauri build"
+                                },
+                                  "dependencies": {
+                                      "date-fns": "^3.6.0",
+                                          "pdf-lib": "^1.17.1"
+                                            },
+                                              "devDependencies": {
+                                                  "@tauri-apps/cli": "^2.0.0",
+                                                      "eslint": "^9.0.0",
+                                                          "jest": "^29.0.0"
+                                                            },
+                                                              "jest": {
+                                                                  "testEnvironment": "node",
+                                                                      "testMatch": ["**/tests/js/**/*.test.js"]
+                                                                        }
+                                                                        }
+}

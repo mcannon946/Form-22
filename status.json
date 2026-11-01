@@ -1,0 +1,21 @@
+{
+      "project": "nc-form22-generator",
+        "last_updated": "2026-11-01T08:00:00-05:00",
+          "overall_status": "in_progress",
+            "milestones": [
+                    { "id": 1, "title": "Canonical AcroForm field map", "status": "pending", "completed_at": null, "notes": "" },
+                        { "id": 2, "title": "JS parser (DOI / 52-week module)", "status": "pending", "completed_at": null, "notes": "" },
+                            { "id": 3, "title": "Python parser (DOI / 52-week module)", "status": "pending", "completed_at": null, "notes": "" },
+                                { "id": 4, "title": "PDF population engine", "status": "pending", "completed_at": null, "notes": "" },
+                                    { "id": 5, "title": "UI scaffold", "status": "pending", "completed_at": null, "notes": "" },
+                                        { "id": 6, "title": "OCR integration", "status": "pending", "completed_at": null, "notes": "" },
+                                            { "id": 7, "title": "License verifier (DPAPI)", "status": "pending", "completed_at": null, "notes": "" },
+                                                { "id": 8, "title": "Packaging scripts (Tauri + Python)", "status": "pending", "completed_at": null, "notes": "" },
+                                                    { "id": 9, "title": "CI pipeline", "status": "pending", "completed_at": null, "notes": "" },
+                                                        { "id": 10, "title": "QA and documentation", "status": "pending", "completed_at": null, "notes": "" }
+                                                          ],
+                                                            "blockers": ["NC Form 22 PDF template required to begin Milestone 1 (AcroForm field extraction)"],
+                                                              "next_action": "Upload NC Form 22 PDF template to unblock Milestone 1"
+                                                              }
+            ]
+}
