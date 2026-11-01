@@ -1,0 +1,58 @@
+name: Milestone Tracker
+
+on:
+  push:
+      branches: [main, dev]
+        schedule:
+            - cron: '0 12 * * *'
+
+            jobs:
+              update-status:
+                  runs-on: ubuntu-latest
+                      permissions:
+                            contents: write
+                                steps:
+                                      - uses: actions/checkout@v4
+
+                                            - name: Set up Python
+                                                    uses: actions/setup-python@v5
+                                                            with:
+                                                                      python-version: '3.11'
+
+                                                                            - name: Update status files
+                                                                                    run: python scripts/update_status.py
+
+                                                                                          - name: Commit status files
+                                                                                                  run: |
+                                                                                                            git config user.name 'github-actions[bot]'
+                                                                                                                      git config user.email 'github-actions[bot]@users.noreply.github.com'
+                                                                                                                                git add STATUS.md status.json status.html scripts/digest_email.html || true
+                                                                                                                                          git diff --cached --quiet || git commit -m 'chore: auto-update status files [skip ci]'
+                                                                                                                                                    git push
+
+                                                                                                                                                      send-digest:
+                                                                                                                                                          runs-on: ubuntu-latest
+                                                                                                                                                              needs: update-status
+                                                                                                                                                                  if: github.event_name == 'schedule'
+                                                                                                                                                                      steps:
+                                                                                                                                                                            - uses: actions/checkout@v4
+
+                                                                                                                                                                                  - name: Set up Python
+                                                                                                                                                                                          uses: actions/setup-python@v5
+                                                                                                                                                                                                  with:
+                                                                                                                                                                                                            python-version: '3.11'
+
+                                                                                                                                                                                                                  - name: Generate digest
+                                                                                                                                                                                                                          run: python scripts/update_status.py
+
+                                                                                                                                                                                                                                - name: Send digest email
+                                                                                                                                                                                                                                        uses: dawidd6/action-send-mail@v3
+                                                                                                                                                                                                                                                with:
+                                                                                                                                                                                                                                                          server_address: smtp.gmail.com
+                                                                                                                                                                                                                                                                    server_port: 587
+                                                                                                                                                                                                                                                                              username: ${{ secrets.DIGEST_SMTP_USER }}
+                                                                                                                                                                                                                                                                                        password: ${{ secrets.DIGEST_SMTP_PASS }}
+                                                                                                                                                                                                                                                                                                  subject: '[NC Form 22] Daily Milestone Digest'
+                                                                                                                                                                                                                                                                                                            to: michael_a_cannon@hotmail.com
+                                                                                                                                                                                                                                                                                                                      from: NC Form 22 Bot
+                                                                                                                                                                                                                                                                                                                                html_body: file://scripts/digest_email.html

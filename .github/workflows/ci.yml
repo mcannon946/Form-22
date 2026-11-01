@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+      branches: [main, dev]
+        pull_request:
+            branches: [main]
+
+            jobs:
+              js-lint-test:
+                  runs-on: ubuntu-latest
+                      steps:
+                            - uses: actions/checkout@v4
+
+                                  - name: Setup Node
+                                          uses: actions/setup-node@v4
+                                                  with:
+                                                            node-version: '20'
+                                                                      cache: 'npm'
+
+                                                                            - name: Install dependencies
+                                                                                    run: npm ci
+
+                                                                                          - name: Lint
+                                                                                                  run: npm run lint
+
+                                                                                                        - name: Test
+                                                                                                                run: npm test
+
+                                                                                                                  python-lint-test:
+                                                                                                                      runs-on: ubuntu-latest
+                                                                                                                          steps:
+                                                                                                                                - uses: actions/checkout@v4
+
+                                                                                                                                      - name: Setup Python
+                                                                                                                                              uses: actions/setup-python@v5
+                                                                                                                                                      with:
+                                                                                                                                                                python-version: '3.11'
+
+                                                                                                                                                                      - name: Install dependencies
+                                                                                                                                                                              run: pip install -r requirements.txt
+
+                                                                                                                                                                                    - name: Lint
+                                                                                                                                                                                            run: ruff check src/python tests/python
+
+                                                                                                                                                                                                  - name: Test
+                                                                                                                                                                                                          run: pytest tests/python --cov=src/python --cov-report=term-missing
+
+                                                                                                                                                                                                            tauri-build:
+                                                                                                                                                                                                                runs-on: windows-latest
+                                                                                                                                                                                                                    needs: [js-lint-test, python-lint-test]
+                                                                                                                                                                                                                        steps:
+                                                                                                                                                                                                                              - uses: actions/checkout@v4
+
+                                                                                                                                                                                                                                    - name: Setup Node
+                                                                                                                                                                                                                                            uses: actions/setup-node@v4
+                                                                                                                                                                                                                                                    with:
+                                                                                                                                                                                                                                                              node-version: '20'
+                                                                                                                                                                                                                                                                        cache: 'npm'
+
+                                                                                                                                                                                                                                                                              - name: Install Rust
+                                                                                                                                                                                                                                                                                      uses: dtolnay/rust-toolchain@stable
+
+                                                                                                                                                                                                                                                                                            - name: Rust cache
+                                                                                                                                                                                                                                                                                                    uses: swatinem/rust-cache@v2
+                                                                                                                                                                                                                                                                                                            with:
+                                                                                                                                                                                                                                                                                                                      workspaces: src-tauri
+
+                                                                                                                                                                                                                                                                                                                            - name: Install JS dependencies
+                                                                                                                                                                                                                                                                                                                                    run: npm ci
+
+                                                                                                                                                                                                                                                                                                                                          - name: Build Tauri app
+                                                                                                                                                                                                                                                                                                                                                  run: npm run tauri build
+
+                                                                                                                                                                                                                                                                                                                                                        - name: Upload MSI artifact
+                                                                                                                                                                                                                                                                                                                                                                uses: actions/upload-artifact@v4
+                                                                                                                                                                                                                                                                                                                                                                        with:
+                                                                                                                                                                                                                                                                                                                                                                                  name: nc-form22-installer
+                                                                                                                                                                                                                                                                                                                                                                                            path: src-tauri/target/release/bundle/msi/*.msi
+                                                                                                                                                                                                                                                                                                                                                                                                      if-no-files-found: warn
