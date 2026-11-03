@@ -71,7 +71,9 @@ Normal: multiple PDFs; PDF extraction and manual corrections; CSV; JSON; DOI cro
 explicit paid/unpaid; cents; first (DOI-364) and last
 (DOI-1) days. Failures with friendly messages: missing payroll, bad date, unsupported format,
 malformed CSV/JSON, negative earnings, invalid `paid_in_full`, missing/corrupt template, unwritable
-output. Verify the PDF has exactly two pages, correct DOI, monthly/total earnings with cents, correct
+output. Upgrade from an earlier version once with the app closed and once with it running; when running,
+Setup should ask you to close the app and continue after it exits. Verify the PDF has exactly two pages,
+correct DOI, monthly/total earnings with cents, correct
 paid-in-full boxes, blank unpaid dates and the unchanged official layout. PDF layouts that do not place
 a recognizable date and earnings on a text line, scans, and ambiguous pay-period totals still need
 manual correction. Automated coverage is in `tests/test_pdf_payroll.py`,

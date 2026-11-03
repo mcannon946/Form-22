@@ -2,6 +2,7 @@
 import re
 import subprocess
 import sys
+import ctypes
 from datetime import date
 from pathlib import Path
 
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT / "ui"))
 sys.path.insert(0, str(ROOT / "packaging"))
 
 import app_paths  # noqa: E402
+import form22_app  # noqa: E402
 import form22_version as ver  # noqa: E402
 import make_version_info  # noqa: E402
 from form22_bridge import preview, run  # noqa: E402
@@ -70,11 +72,37 @@ def test_packaging_config_sanity():
     assert "PrivilegesRequired=lowest" in iss
     assert "OutputBaseFilename=NC-Form-22-Generator-Setup" in iss
     assert "Form22Generator.exe" in iss
+    app_mutex = re.search(r'^APP_MUTEX_NAME = r"([^"]+)"$', (ROOT / "ui" / "form22_app.py").read_text(),
+                          re.MULTILINE)
+    assert app_mutex
+    assert f"AppMutex={app_mutex.group(1)}" in iss
+    assert "CloseApplications=no" in iss
+    assert "CloseApplications=yes" not in iss
     assert f'"{ver.APP_VERSION}"' in iss
     assert re.search(r"AppId=\{\{[0-9A-F-]{36}\}", iss)
     runtime = (ROOT / "requirements-runtime.txt").read_text().lower()
     assert "pypdf" in runtime
     assert not any(w in runtime for w in ("tesseract", "pyinstaller", "requests", "sentry"))
+
+
+def test_app_mutex_is_retained_for_installer_detection(monkeypatch):
+    calls = []
+
+    class FakeCreateMutex:
+        def __call__(self, security, owned, name):
+            calls.append((security, owned, name))
+            return 42
+
+    class FakeKernel32:
+        CreateMutexW = FakeCreateMutex()
+
+    monkeypatch.setattr(form22_app.sys, "platform", "win32")
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: FakeKernel32(), raising=False)
+    monkeypatch.setattr(form22_app, "_APP_MUTEX_HANDLE", None)
+    form22_app._hold_app_mutex()
+
+    assert calls == [(None, False, form22_app.APP_MUTEX_NAME)]
+    assert form22_app._APP_MUTEX_HANDLE == 42
 
 
 def test_no_empty_source_files():

@@ -7,6 +7,8 @@
 [Setup]
 ; Fixed AppId enables clean in-place upgrades.
 AppId={{6B7C1E52-3F0A-4C57-9E0D-4F22A1C9B022}
+; Check the app's explicit mutex instead of Restart Manager's broader file-use detection.
+AppMutex=Local\NCForm22Generator-6B7C1E52-3F0A-4C57-9E0D-4F22A1C9B022
 AppName=NC Form 22 Generator
 AppVersion={#AppVersion}
 AppVerName=NC Form 22 Generator {#AppVersion}
@@ -23,7 +25,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
-CloseApplications=yes
+CloseApplications=no
 VersionInfoVersion={#AppVersion}
 VersionInfoProductName=NC Form 22 Generator
 
