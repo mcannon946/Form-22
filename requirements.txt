@@ -1,8 +1,4 @@
 pypdf>=4.0.0
-python-dateutil>=2.9.0
-pytesseract>=0.3.10
-pdf2image>=1.17.0
-Pillow>=10.0.0
 PyInstaller>=6.0.0
 ruff>=0.3.0
 pytest>=8.0.0
