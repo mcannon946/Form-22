@@ -14,7 +14,7 @@ from pypdf.generic import (ArrayObject, DictionaryObject, FloatObject, NameObjec
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from form22_day_grid import MONTH_SUFFIX, field_for_date  # noqa: E402
+from form22_day_grid import MONTH_SUFFIX, build_day_grid_map, field_for_date  # noqa: E402
 from form22_earnings_fields import MONTH_EARNINGS_FIELDS, TOTAL_EARNINGS_FIELDS  # noqa: E402
 from form22_pipeline import build_payload  # noqa: E402
 from generate_form22 import main as cli_main  # noqa: E402
@@ -184,19 +184,49 @@ def test_generated_pdf(template, tmp_path):
     csv_path = tmp_path / "p.csv"
     csv_path.write_text("date,amount,paid_in_full\n2026-01-05,200.20,true\n2026-01-06,0.05,false\n"
                         "2025-12-31,1000.10,TRUE\n2026-08-15,500,true\n")
+    fields_path = tmp_path / "fields.json"
+    fields_path.write_text(json.dumps({"Employees Name": "Test Employee"}))
     out = tmp_path / "out.pdf"
     assert cli_main(["--payroll", str(csv_path), "--doi", DOI, "--template", str(template),
-                     "--output", str(out)]) == 0
+                     "--output", str(out), "--fields", str(fields_path)]) == 0
     reader = PdfReader(str(out))
     assert len(reader.pages) == 2
     f = reader.get_fields()
     assert f["Date of Injury"]["/V"] == "08/15/2026"
+    assert f["Employees Name"]["/V"] == "Test Employee"
     assert (f[MONTH_EARNINGS_FIELDS[1][0]]["/V"], f[MONTH_EARNINGS_FIELDS[1][1]]["/V"]) == ("200", "25")
     assert (f[TOTAL_EARNINGS_FIELDS[0]]["/V"], f[TOTAL_EARNINGS_FIELDS[1]]["/V"]) == ("1200", "35")
     assert f[field_for_date(date(2026, 1, 5))]["/V"] == "/Yes"
     assert f[field_for_date(date(2025, 12, 31))]["/V"] == "/Yes"
     assert f[field_for_date(date(2026, 1, 6))].get("/V") in (None, "/Off")
     assert f[field_for_date(date(2026, 8, 15))].get("/V") in (None, "/Off")
+
+
+def test_all_monthly_earnings_fields_populate(template, tmp_path):
+    rows = [
+        row(date(2025 if month >= 9 else 2026, month, 1).isoformat(), "100.01", paid=False)
+        for month in range(1, 13)
+    ]
+    payload = build_payload(rows, DOI)
+    out = tmp_path / "all_months.pdf"
+    populate_pdf(template, out, payload)
+
+    fields = PdfReader(str(out)).get_fields()
+    for month, (dollars, cents) in MONTH_EARNINGS_FIELDS.items():
+        assert (fields[dollars]["/V"], fields[cents]["/V"]) == ("100", "01")
+        assert fields[field_for_date(date(2025 if month >= 9 else 2026, month, 1))].get("/V") in (
+            None, "/Off"
+        )
+    assert (fields[TOTAL_EARNINGS_FIELDS[0]]["/V"], fields[TOTAL_EARNINGS_FIELDS[1]]["/V"]) == (
+        "1200", "12"
+    )
+
+
+def test_calendar_checkbox_fields_exist(template):
+    fields = PdfReader(str(template)).get_fields()
+    day_grid = build_day_grid_map(str(template), 2026)
+    assert len(day_grid) == 365
+    assert all(fields[name]["/FT"] == "/Btn" for name in day_grid.values())
 
 
 def test_engine_rejects_unknown_field_and_missing_template(template, tmp_path):
