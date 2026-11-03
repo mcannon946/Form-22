@@ -1,0 +1,83 @@
+name: Windows Package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-build.txt
+
+      - name: Verify official template and no empty sources
+        shell: pwsh
+        run: |
+          if (-not (Test-Path templates/form22.pdf)) { throw "templates/form22.pdf missing" }
+          $empty = Get-ChildItem -Recurse -File -Include *.py,*.yml,*.iss,*.spec,*.pdf |
+            Where-Object { $_.Length -eq 0 -and $_.FullName -notmatch '\\(\.git|node_modules)\\' }
+          if ($empty) { $empty | ForEach-Object { Write-Error "Empty file: $($_.FullName)" }; exit 1 }
+
+      - name: Lint
+        run: >-
+          ruff check scripts/app_paths.py scripts/form22_day_grid.py scripts/form22_earnings_fields.py
+          scripts/form22_pipeline.py scripts/form22_version.py scripts/generate_form22.py
+          scripts/payroll_importer.py scripts/payroll_parser.py scripts/pdf_population_engine.py
+          ui packaging tests --select E7,E9,F63,F7,F82
+
+      - name: Test
+        run: python -m pytest tests -q
+
+      - name: Generate Windows version resource
+        run: python packaging/make_version_info.py build/version_info.txt
+
+      - name: Build Form22Generator.exe
+        run: python -m PyInstaller --noconfirm --clean packaging/Form22Generator.spec
+
+      - name: Smoke test packaged executable
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist/Form22Generator.exe -ArgumentList '--selftest', "$PWD/smoke.pdf" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Packaged app self-test failed (exit $($p.ExitCode))" }
+          python -c "from pypdf import PdfReader; r = PdfReader('smoke.pdf'); f = r.get_fields(); assert len(r.pages) == 2; assert f['Date of Injury']['/V'] == '08/15/2026'; print('smoke PDF ok')"
+          $v = (Get-Item dist/Form22Generator.exe).VersionInfo
+          if ($v.ProductName -ne 'NC Form 22 Generator' -or $v.FileVersion -ne '0.9.0') { throw "Bad version info: $($v.ProductName) $($v.FileVersion)" }
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $v = python scripts/form22_version.py
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" packaging\installer.iss
+          if (-not (Test-Path dist/NC-Form-22-Generator-Setup.exe)) { throw "Installer not produced" }
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Form22Generator-exe
+          path: dist/Form22Generator.exe
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: NC-Form-22-Generator-Setup
+          path: dist/NC-Form-22-Generator-Setup.exe
+          if-no-files-found: error

@@ -30,6 +30,10 @@ jobs:
           scripts/form22_day_grid.py
           scripts/form22_earnings_fields.py
           scripts/form22_pipeline.py
+          scripts/form22_version.py
+          scripts/app_paths.py
+          ui packaging
+          tests/test_packaging_and_ui.py
           scripts/generate_form22.py
           scripts/payroll_importer.py
           scripts/payroll_parser.py
