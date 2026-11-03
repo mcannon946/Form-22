@@ -24,6 +24,17 @@ def _widget_on_state(annot: Any) -> str:
     return "/Yes"
 
 
+def _qualified_name(annot: Any) -> str | None:
+    parts = []
+    node = annot
+    while node is not None:
+        if "/T" in node:
+            parts.append(str(node["/T"]))
+        parent = node.get("/Parent")
+        node = parent.get_object() if parent is not None else None
+    return ".".join(reversed(parts)) if parts else None
+
+
 def validate_fields(template: str | Path, text_fields: Mapping[str, str], checkboxes: Iterable[str]) -> None:
     fields = PdfReader(str(template)).get_fields() or {}
     missing = [n for n in list(text_fields) + list(checkboxes) if n not in fields]
@@ -55,10 +66,8 @@ def populate_pdf(template: str | Path, output: str | Path, payload: Mapping[str,
         for annot_ref in page.get("/Annots", []) or []:
             annot = annot_ref.get_object()
             parent = annot.get("/Parent")
-            name = annot.get("/T")
-            if name is None and parent is not None:
-                name = parent.get_object().get("/T")
-            if name is None or str(name) not in wanted:
+            name = _qualified_name(annot)
+            if name is None or name not in wanted:
                 continue
             state = _widget_on_state(annot)
             annot[NameObject("/AS")] = NameObject(state)
