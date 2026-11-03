@@ -1,0 +1,4 @@
+[
+  {"date": "2026-01-15", "amount": "1200.50", "paid_in_full": "true", "source": "payroll"},
+  {"date": "2026-02-01", "amount": 800.25, "paid_in_full": "false"}
+]

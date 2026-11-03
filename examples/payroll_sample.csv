@@ -1,0 +1,4 @@
+date,amount,paid_in_full,source
+2026-01-15,1200.50,true,payroll
+2026-02-01,800.25,false,payroll
+2026-03-10,450.00,yes,payroll
