@@ -1,20 +1,18 @@
-"""Tests for the Form 22 pipeline. Uses a synthetic AcroForm template that mirrors the
-official field names; if templates/form22.pdf exists it is also exercised."""
+"""Tests for the Form 22 pipeline using the official 08/2026 AcroForm template."""
 import json
 import sys
+from calendar import month_name
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from pypdf import PdfReader, PdfWriter
-from pypdf.generic import (ArrayObject, DictionaryObject, FloatObject, NameObject,
-                           NumberObject, TextStringObject)
+from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from form22_day_grid import MONTH_SUFFIX, build_day_grid_map, field_for_date  # noqa: E402
+from form22_day_grid import build_day_grid_map, field_for_date  # noqa: E402
 from form22_earnings_fields import MONTH_EARNINGS_FIELDS, TOTAL_EARNINGS_FIELDS  # noqa: E402
 from form22_pipeline import build_payload  # noqa: E402
 from generate_form22 import main as cli_main  # noqa: E402
@@ -135,49 +133,11 @@ def test_payload_totals_and_checkboxes():
     assert not any("aww" in k.lower() or "rate" in k.lower() for k in p["text_fields"])
 
 
-# ---- PDF --------------------------------------------------------------
-def make_template(path):
-    text_names = {"Date of Injury", "Employees Name", *TOTAL_EARNINGS_FIELDS}
-    for d, c in MONTH_EARNINGS_FIELDS.values():
-        text_names.update((d, c))
-    boxes = []
-    for m in range(1, 13):
-        for d in range(1, 32):
-            boxes.append(f"Check Box{d if d == 1 else d + 1}.{MONTH_SUFFIX[m]}")
-    w = PdfWriter()
-    pages = [w.add_blank_page(612, 792), w.add_blank_page(612, 792)]
-    fields = ArrayObject()
-    for i, name in enumerate(sorted(text_names) + boxes):
-        is_box = name.startswith("Check Box")
-        widget = DictionaryObject({
-            NameObject("/Type"): NameObject("/Annot"), NameObject("/Subtype"): NameObject("/Widget"),
-            NameObject("/FT"): NameObject("/Btn" if is_box else "/Tx"),
-            NameObject("/T"): TextStringObject(name),
-            NameObject("/Rect"): ArrayObject([FloatObject(10), FloatObject(10 + i % 700), FloatObject(20),
-                                              FloatObject(20 + i % 700)]),
-        })
-        if is_box:
-            widget[NameObject("/AS")] = NameObject("/Off")
-            widget[NameObject("/AP")] = DictionaryObject({NameObject("/N"): DictionaryObject({
-                NameObject("/Yes"): w._add_object(DictionaryObject()),
-                NameObject("/Off"): w._add_object(DictionaryObject())})})
-        ref = w._add_object(widget)
-        fields.append(ref)
-        page = pages[0 if i % 2 == 0 else 1]
-        page.setdefault(NameObject("/Annots"), ArrayObject()).append(ref)
-    w._root_object[NameObject("/AcroForm")] = DictionaryObject({NameObject("/Fields"): fields})
-    with open(path, "wb") as fh:
-        w.write(fh)
-
-
 @pytest.fixture(scope="module")
-def template(tmp_path_factory):
+def template():
     official = ROOT / "templates" / "form22.pdf"
-    if official.is_file():
-        return official
-    p = tmp_path_factory.mktemp("tpl") / "form22_test_template.pdf"
-    make_template(p)
-    return p
+    assert official.is_file(), f"Official Form 22 PDF is required: {official}"
+    return official
 
 
 def test_generated_pdf(template, tmp_path):
@@ -191,6 +151,9 @@ def test_generated_pdf(template, tmp_path):
                      "--output", str(out), "--fields", str(fields_path)]) == 0
     reader = PdfReader(str(out))
     assert len(reader.pages) == 2
+    assert all(page.extract_text().strip() for page in reader.pages)
+    assert "STATEMENT OF DAYS WORKED" in reader.pages[0].extract_text()
+    assert "INSTRUCTIONS" in reader.pages[1].extract_text()
     f = reader.get_fields()
     assert f["Date of Injury"]["/V"] == "08/15/2026"
     assert f["Employees Name"]["/V"] == "Test Employee"
@@ -198,8 +161,8 @@ def test_generated_pdf(template, tmp_path):
     assert (f[TOTAL_EARNINGS_FIELDS[0]]["/V"], f[TOTAL_EARNINGS_FIELDS[1]]["/V"]) == ("1200", "35")
     assert f[field_for_date(date(2026, 1, 5))]["/V"] == "/Yes"
     assert f[field_for_date(date(2025, 12, 31))]["/V"] == "/Yes"
-    assert f[field_for_date(date(2026, 1, 6))].get("/V") in (None, "/Off")
-    assert f[field_for_date(date(2026, 8, 15))].get("/V") in (None, "/Off")
+    assert f[field_for_date(date(2026, 1, 6))].get("/V") is None
+    assert f[field_for_date(date(2026, 8, 15))].get("/V") is None
 
 
 def test_all_monthly_earnings_fields_populate(template, tmp_path):
@@ -213,20 +176,29 @@ def test_all_monthly_earnings_fields_populate(template, tmp_path):
 
     fields = PdfReader(str(out)).get_fields()
     for month, (dollars, cents) in MONTH_EARNINGS_FIELDS.items():
+        month_label = month_name[month]
+        assert fields[dollars]["/TU"] == f"Amount earned in {month_label} (dollars)"
+        assert fields[cents]["/TU"] == f"Amount earned in {month_label} (cents)"
         assert (fields[dollars]["/V"], fields[cents]["/V"]) == ("100", "01")
-        assert fields[field_for_date(date(2025 if month >= 9 else 2026, month, 1))].get("/V") in (
-            None, "/Off"
-        )
+        assert fields[field_for_date(date(2025 if month >= 9 else 2026, month, 1))].get("/V") is None
     assert (fields[TOTAL_EARNINGS_FIELDS[0]]["/V"], fields[TOTAL_EARNINGS_FIELDS[1]]["/V"]) == (
         "1200", "12"
     )
+    assert fields[TOTAL_EARNINGS_FIELDS[0]]["/TU"] == "Total amount earned (dollars)"
+    assert fields[TOTAL_EARNINGS_FIELDS[1]]["/TU"] == "Total amount earned (cents)"
 
 
 def test_calendar_checkbox_fields_exist(template):
     fields = PdfReader(str(template)).get_fields()
     day_grid = build_day_grid_map(str(template), 2026)
     assert len(day_grid) == 365
-    assert all(fields[name]["/FT"] == "/Btn" for name in day_grid.values())
+    for day, name in day_grid.items():
+        value = date.fromisoformat(day)
+        suffix = "th" if 10 <= value.day % 100 <= 20 else {
+            1: "st", 2: "nd", 3: "rd"
+        }.get(value.day % 10, "th")
+        assert fields[name]["/FT"] == "/Btn"
+        assert fields[name]["/TU"] == f"{month_name[value.month]} {value.day}{suffix}"
 
 
 def test_engine_rejects_unknown_field_and_missing_template(template, tmp_path):
