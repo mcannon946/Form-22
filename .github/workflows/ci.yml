@@ -13,10 +13,10 @@ jobs:
   python-lint-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -30,11 +30,17 @@ jobs:
           scripts/form22_day_grid.py
           scripts/form22_earnings_fields.py
           scripts/form22_pipeline.py
+          scripts/form22_version.py
+          scripts/app_paths.py
+          ui packaging
+          tests/test_packaging_and_ui.py
           scripts/generate_form22.py
           scripts/payroll_importer.py
           scripts/payroll_parser.py
+          scripts/pdf_payroll.py
           scripts/pdf_population_engine.py
           tests/test_form22_pipeline.py
+          tests/test_pdf_payroll.py
           --select E7,E9,F63,F7,F82
 
       - name: Test
