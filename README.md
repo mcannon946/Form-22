@@ -3,18 +3,30 @@
 > **This tool fills Form 22. It does not calculate average weekly wage or compensation rate.**
 
 A local, offline Windows application that fills the North Carolina Industrial Commission
-Form 22 (revision 08/2026) from a payroll CSV or JSON file. No payroll, employee or claim data
-ever leaves your computer; there is no telemetry.
+Form 22 (revision 08/2026) from payroll PDFs, CSV or JSON. PDF text is extracted on your computer;
+no payroll, employee or claim data leaves your computer, and there is no telemetry.
 
 ## For normal users
 
 1. Download `NC-Form-22-Generator-Setup.exe` (from the GitHub Actions "Windows Package" run artifacts or a release).
 2. Run it and follow the prompts. No administrator rights are needed; a desktop shortcut is optional.
 3. Launch **NC Form 22 Generator** from the Start menu.
-4. Click **Browse...** and select your payroll CSV or JSON file.
-5. Enter the date of injury as `YYYY-MM-DD`; review the summary shown by **Check payroll**.
-6. Click **Generate Form 22**, choose where to save the PDF, then use **Open PDF** or **Show in folder**.
+4. Click **Add Payroll PDF(s)...** to select one or more payroll records.
+5. Enter or confirm the date of injury.
+6. Click **Extract payroll for review**. Check the reporting period, dates, earnings and paid-in-full
+   status; edit extracted rows, add manual rows, remove errors, and exclude confirmed duplicates.
+7. Click **Accept reviewed rows**, then **Generate Form 22**. Choose where to save the PDF, then use
+   **Open completed PDF** or **Show in folder**.
 
+Extracted values are candidates and must be reviewed before generation. Text-based PDFs are read locally
+with `pypdf`; scanned/image-only files are not OCR'd and need manual entry or a text-based payroll record.
+The extractor handles clear date-and-earnings lines and pay-period summaries conservatively. If a
+document does not establish a daily date or paid-in-full status, those fields remain missing and must be
+corrected or completed in the review screen. Each candidate shows its source filename, page and text.
+Overlapping rows, different earnings on the same date, and dates outside the reporting period are
+highlighted; no conflicting row is silently discarded.
+
+CSV and JSON remain available under **Add CSV/JSON (advanced)...** and also go through the review screen.
 Payroll columns/keys: `date` (YYYY-MM-DD), `amount` (non-negative number), optional `paid_in_full`
 (true/false, yes/no, 1/0; blank means true) and `source`. See `examples/`.
 The 52 weeks (364 days) before the date of injury are reported; the injury date itself is excluded.
@@ -55,11 +67,14 @@ lives in `scripts/form22_version.py`.
 
 ## Windows acceptance checklist (manual)
 
-Normal: CSV; JSON; DOI crossing a year boundary; explicit paid/unpaid; cents; first (DOI-364) and last
+Normal: multiple PDFs; PDF extraction and manual corrections; CSV; JSON; DOI crossing a year boundary;
+explicit paid/unpaid; cents; first (DOI-364) and last
 (DOI-1) days. Failures with friendly messages: missing payroll, bad date, unsupported format,
 malformed CSV/JSON, negative earnings, invalid `paid_in_full`, missing/corrupt template, unwritable
 output. Verify the PDF has exactly two pages, correct DOI, monthly/total earnings with cents, correct
-paid-in-full boxes, blank unpaid dates and the unchanged official layout. Most of these are automated in
+paid-in-full boxes, blank unpaid dates and the unchanged official layout. PDF layouts that do not place
+a recognizable date and earnings on a text line, scans, and ambiguous pay-period totals still need
+manual correction. Automated coverage is in `tests/test_pdf_payroll.py`,
 `tests/test_packaging_and_ui.py` and `tests/test_form22_pipeline.py`.
 
 ## License

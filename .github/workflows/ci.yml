@@ -37,8 +37,10 @@ jobs:
           scripts/generate_form22.py
           scripts/payroll_importer.py
           scripts/payroll_parser.py
+          scripts/pdf_payroll.py
           scripts/pdf_population_engine.py
           tests/test_form22_pipeline.py
+          tests/test_pdf_payroll.py
           --select E7,E9,F63,F7,F82
 
       - name: Test

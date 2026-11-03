@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from app_paths import bundled_template  # noqa: E402
 from form22_pipeline import build_payload  # noqa: E402
 from payroll_importer import import_payroll  # noqa: E402
-from payroll_parser import parse_iso_date  # noqa: E402
+from payroll_parser import parse_amount, parse_bool, parse_iso_date, form22_reporting_window  # noqa: E402
 from pdf_population_engine import populate_pdf  # noqa: E402
 
 TEMPLATE_PROBLEM = ("The bundled Form 22 template is missing or damaged. "
@@ -96,6 +96,94 @@ def run(payroll: str, doi: str, output: str, template: str | None = None) -> dic
     except (OSError, ValueError, KeyError, csv.Error) as exc:
         return {"ok": False, "message": _friendly(exc, "payroll")}
 
+    template_path = Path(template.strip()) if template and template.strip() else bundled_template()
+    template_problem = TEMPLATE_PROBLEM if template_path == bundled_template() else CUSTOM_TEMPLATE_PROBLEM
+    if not template_path.is_file():
+        return {"ok": False, "message": template_problem}
+    try:
+        populate_pdf(template_path, output_path, payload)
+    except (KeyError, ValueError):
+        return {"ok": False, "message": template_problem}
+    except OSError as exc:
+        return {"ok": False, "message": _friendly(exc, "output")}
+    except Exception:  # noqa: BLE001 - pypdf raises its own error types for corrupt PDFs
+        return {"ok": False, "message": template_problem}
+    return {"ok": True, "output": str(output_path),
+            "message": f"Form 22 saved to:\n{output_path}"}
+
+
+def _reviewed_rows(rows: list[dict], doi: str) -> list[dict]:
+    if not rows:
+        raise ValueError("Add at least one payroll row before generating Form 22.")
+    form22_reporting_window(doi)
+    accepted = []
+    seen: set[tuple[str, object]] = set()
+    for index, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            raise ValueError(f"Payroll row {index} is not valid.")
+        if not row.get("include", True):
+            continue
+        if row.get("review_status") != "Reviewed":
+            raise ValueError(f"Review payroll row {index} before generating Form 22.")
+        work_date = parse_iso_date(row.get("date"), f"row {index} date")
+        amount = parse_amount(row.get("amount"), f"row {index} earnings")
+        raw_paid = row.get("paid_in_full")
+        if raw_paid is None or raw_paid == "":
+            raise ValueError(f"Choose whether payroll row {index} was paid in full.")
+        paid = parse_bool(raw_paid, f"row {index} paid-in-full status")
+        duplicate_key = (work_date.isoformat(), amount)
+        if duplicate_key in seen:
+            raise ValueError(
+                f"Identical payroll rows are both selected (row {index}). "
+                "Exclude or delete a duplicate before continuing."
+            )
+        seen.add(duplicate_key)
+        accepted.append({
+            "date": work_date.isoformat(),
+            "amount": amount,
+            "paid_in_full": paid,
+            "source": row.get("source"),
+        })
+    if not accepted:
+        raise ValueError("No payroll rows are selected. Add or include a reviewed row.")
+    return accepted
+
+
+def preview_reviewed(rows: list[dict], doi: str) -> dict:
+    """Validate explicitly reviewed rows before presenting the final summary."""
+    try:
+        accepted = _reviewed_rows(rows, doi)
+        payload = build_payload(accepted, doi.strip())
+    except (OSError, ValueError, KeyError) as exc:
+        return {"ok": False, "message": _friendly(exc, "payroll")}
+    window = payload["window"]
+    outside = sum(not window["start"] <= row["date"] <= window["end"] for row in accepted)
+    total = sum((Decimal(str(amount)) for amount in payload["monthly_totals"].values()), Decimal(0))
+    return {
+        "ok": True,
+        "message": (f"Reviewed rows: {len(accepted)} ({outside} outside the reporting period)\n"
+                    f"Reporting period: {window['start']} to {window['end']}\n"
+                    f"Rows in period: {len(accepted) - outside}\n"
+                    f"Total earnings in period: ${total:,.2f}\n"
+                    f"Days marked paid in full: {len(payload['paid_in_full_dates'])}"),
+        "rows": len(accepted),
+        "rows_in_window": len(accepted) - outside,
+        "total": str(total),
+    }
+
+
+def run_reviewed(rows: list[dict], doi: str, output: str, template: str | None = None) -> dict:
+    """Generate Form 22 only from rows explicitly accepted in the review screen."""
+    if not output or not output.strip():
+        return {"ok": False, "message": "Please choose where to save the completed PDF."}
+    output_path = Path(output.strip())
+    if output_path.suffix.lower() != ".pdf":
+        output_path = output_path.with_suffix(".pdf")
+    try:
+        accepted = _reviewed_rows(rows, doi.strip())
+        payload = build_payload(accepted, doi.strip())
+    except (OSError, ValueError, KeyError) as exc:
+        return {"ok": False, "message": _friendly(exc, "payroll")}
     template_path = Path(template.strip()) if template and template.strip() else bundled_template()
     template_problem = TEMPLATE_PROBLEM if template_path == bundled_template() else CUSTOM_TEMPLATE_PROBLEM
     if not template_path.is_file():
